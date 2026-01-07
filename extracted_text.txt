@@ -1,0 +1,401 @@
+Mise en œuvre d’une
+infrastructure cloud de
+supervision centralisée sous
+AWS
+Déploiement de Zabbix conteneurisé pour le monitoring d’un
+parc hybride (Linux & Windows)
+Réalisé par: EL FELLAH Meryem
+Encadré par: KHIAT Azeddine
+Filière: 2 ACI INFO groupe A
+Module: Ingénierie des infrastructures CLOUD
+Université: Mundiapolis
+
+Remerciements
+Je tiens à exprimer ma profonde gratitude à mon encadrant, M. Azeddine KHIAT, pour ses directives
+précieuses et son accompagnement pédagogique tout au long de ce module de Cloud Computing. Ce
+projet a constitué une opportunité majeure pour consolider mes compétences en administration
+système et en architecture cloud. La mise en œuvre concrète des concepts théoriques abordés en
+cours, notamment à travers le déploiement de services AWS tels que EC2 et le VPC, ainsi que l'usage
+de la conteneurisation, m'a permis d'acquérir une expertise pratique essentielle.
+Avant-propos
+La supervision des infrastructures informatiques constitue désormais un pilier stratégique des
+opérations en entreprise. Dans un contexte de généralisation du Cloud, la surveillance en temps réel de
+la disponibilité et des performances est devenue un enjeu critique pour assurer la continuité d'activité.
+Réalisé dans le cadre du module Cloud Computing, ce projet simule un environnement de production
+réel hébergé sur Amazon Web Services (AWS). L'objectif dépasse le simple déploiement d'instances
+: il s'agit de concevoir une architecture résiliente et proactive, capable d'alerter les administrateurs dès
+l'apparition d'un incident.
+L'utilisation de la solution Zabbix, associée à la conteneurisation via Docker, a été choisie pour
+répondre aux impératifs d'agilité et de standardisation, compétences fondamentales pour un ingénieur.
+Ce rapport détaille l'intégralité de la démarche technique, de la structuration du réseau VPC à l'analyse
+fine des métriques de performance du parc hybride.
+
+1. Introduction et Périmètre du Projet
+Ce projet, réalisé dans le cadre du module Cloud Computing, porte sur la conception et le
+déploiement d'une infrastructure de supervision centralisée sur le cloud Amazon Web Services
+(AWS). L'objectif majeur est de mettre en place une solution de monitoring performante capable
+d'assurer la visibilité et le suivi d'un parc informatique hybride, composé d'instances Linux et
+Windows Server.
+Cette approche permet de garantir une gestion proactive des ressources cloud tout en s'adaptant à
+l'hétérogénéité des systèmes d'exploitation rencontrés en milieu professionnel.
+1.1 Écosystème Technologique
+Pour répondre aux exigences de flexibilité et de scalabilité du projet, les technologies suivantes ont été
+mobilisées :
+ Amazon Web Services (AWS) : Fournisseur de l'infrastructure Cloud. L'architecture repose
+sur l'utilisation d'instances EC2 pour le calcul, d'un VPC pour l'isolation réseau et de Security
+Groups pour le contrôle granulaire des flux de données.
+ Docker : Utilisé pour la conteneurisation du serveur Zabbix. Cette technologie permet un
+déploiement rapide, une portabilité accrue et une gestion simplifiée des dépendances (base de
+données, serveur web, serveur Zabbix).
+ Zabbix : Solution de monitoring open-source de référence, choisie pour sa capacité à collecter
+des métriques complexes et à générer des alertes intelligentes via des agents légers installés
+sur les clients.
+1.2 Ressources du projet:
+Ce projet a été publié dans un dépôt sur mon compte GitHub:
+https://github.com/merra3012/infrastructure_cloud_supervision_centralis-
+e_AWS
+
+1.3 Architecture globale du projet:
+ Cohérence du Parc : L'utilisation du type d'instance t3.medium pour l'ensemble du parc
+garantit des performances homogènes pour les tests de charge.
+ Modernité de l'Infrastructure : Le déploiement du client Windows repose sur l'AMI
+Windows Server 2025, démontrant la capacité de la solution Zabbix à superviser les versions
+les plus récentes des systèmes d'exploitation Microsoft.
+ Segmentation Réseau : Bien que les instances soient situées dans des plages d'adresses
+différentes (10.0.3.x et 10.0.14.x), elles appartiennent au même VPC
+(EL_FELLAH_Meryem_Zabbix_Server-vpc) et au même groupe de sécurité
+(EL_FELLAH_Meryem_ZabbixServerSG), permettant ainsi un routage interne fluide des flux
+de monitoring.
+2. Configuration de l'Infrastructure Cloud (AWS)
+Le déploiement de la solution de monitoring repose sur une infrastructure robuste et isolée au
+sein du cloud Amazon Web Services (AWS). Conformément aux exigences du projet,
+l'ensemble des ressources a été déployé dans la région us-east-1 (Virginie du Nord), choisie
+pour sa stabilité et sa compatibilité avec l'environnement AWS Academy Learner Lab.
+
+2.1. Architecture Réseau et Sécurité:
+Au sein de cette région, un réseau privé virtuel (VPC) nommé
+EL_FELLAH_Meryem_Zabbix_Server-vpc a été créé pour assurer l'isolation logique des
+serveurs. Cette segmentation réseau est fondamentale pour garantir que les flux de métriques
+entre les agents et le serveur Zabbix transitent de manière sécurisée et contrôlée.
+La structuration du réseau se poursuit avec la mise en place d'un sous-réseau au sein du VPC
+précédemment créé. Comme l'indique la figure au-dessous, cette étape est cruciale pour définir la
+plage d'adressage IP où seront déployées les instances EC2.
+
+ Nom du sous-réseau : Le sous-réseau a été nommé my_pub_subnet afin de l'identifier
+facilement comme la zone publique de l'infrastructure.
+ Sélection du VPC : Il est rattaché au bloc d'adresse CIDR IPv4 10.0.0.0/16, correspondant au
+VPC EL_FELLAH_Meryem_Zabbix_Server-vpc.
+Cette configuration garantit que le serveur Zabbix et ses agents (Linux et Windows) disposent d'un
+espace d'adressage cohérent pour communiquer efficacement à l'intérieur du cloud AWS.
+Le Groupe de Sécurité, nommé EL_FELLAH_Meryem_ZabbixServerSG, fait office de pare-feu
+virtuel pour contrôler de manière granulaire les flux entrants vers le serveur et les agents. Comme
+illustré dans la figure au-dessousa, les règles entrantes ont été rigoureusement configurées pour
+permettre le fonctionnement optimal de la solution Zabbix tout en assurant l'administration des
+instances :
+ Flux de Supervision (Zabbix) : * L'ouverture du port TCP 10051 (Zabbix Trapper) permet
+au serveur de recevoir les données envoyées par les agents.
+o L'ouverture du port TCP 10050 (Zabbix Agent) autorise le serveur à interroger
+activement les clients.
+ Accès Interface Web : Les ports HTTP (80) et HTTPS (443) ont été ouverts pour permettre
+la consultation du tableau de bord Zabbix via un navigateur web depuis n'importe quelle
+source.
+ Administration à distance : * Le port SSH (22) est activé pour la gestion en ligne de
+commande de l'instance Linux.
+o Le port RDP (3389) a été configuré pour permettre l'accès au bureau à distance du
+client Windows Server.
+Toutes ces règles sont appliquées avec une source ouverte (0.0.0.0/0) pour les besoins du Lab,
+garantissant une connectivité totale entre les différents composants du parc hybride situé dans le VPC.
+
+2.2. Inventaire des Instances EC2
+L'architecture hybride est composée de trois instances stratégiques, chacune répondant à un
+rôle précis :
+a) Instance 1: Zabbix Server
+Le cœur de l'infrastructure de supervision repose sur une instance robuste configurée pour héberger le
+serveur Zabbix via Docker. Comme illustré dans les étapes de lancement (Figures au-dessous), les
+paramètres suivants ont été appliqués :
+ Identification et Nommage : L'instance a été nommée
+EL_FELLAH_Meryem_ZabbixUbuntu, respectant ainsi la nomenclature personnalisée
+requise pour le projet.
+ Système d'Exploitation (AMI) : Le choix s'est porté sur une image Ubuntu Server 24.04
+LTS (Noble Numbat) en architecture 64 bits (x86), offrant un environnement moderne et
+stable pour la conteneurisation.
+ Dimensionnement (Type d'instance) : Une instance de type t3.medium (2 vCPU, 4 Gio de
+mémoire) a été sélectionnée pour garantir les ressources nécessaires au fonctionnement
+simultané du serveur Zabbix, de sa base de données et de l'interface Web.
+ Configuration Réseau et Sécurité : * L'instance est intégrée au VPC
+EL_FELLAH_Meryem_Zabbix_Server-vpc.
+o Elle est déployée dans le sous-réseau public my_pub_subnet avec l'attribution
+automatique d'une adresse IP publique activée pour permettre l'accès à l'interface de
+monitoring.
+o La sécurité est assurée par le groupe de sécurité
+EL_FELLAH_Meryem_ZabbixServerSG, qui autorise les flux de supervision et
+l'administration distante.
+ Authentification : Une paire de clés spécifique, nommée
+cle_EL_FELLAH_Meryem_ZabbixUbuntu, a été générée pour sécuriser les accès SSH à la
+machine.
+
+b) Instance 2: Linux Ubuntu Server
+Le second pilier de ce parc hybride est constitué par une instance Linux dédiée à la supervision. Bien
+que partageant une infrastructure réseau commune avec le serveur, elle joue le rôle de nœud supervisé.
+Comme illustré dans la phase de lancement (Figures ci-dessous), sa configuration repose sur les
+spécifications suivantes :
+ Identification : L'instance est nommée LinuxClient_EL_FELLAH_Meryem, permettant
+une distinction claire lors de son enregistrement dans l'inventaire Zabbix.
+ Système d'Exploitation (AMI) : Elle utilise l'image Ubuntu Server 24.04 LTS, garantissant
+une compatibilité totale avec les agents Zabbix de dernière génération (version 7.0.x).
+ Ressources (Type d'instance) : Aussi t3.medium.
+ Intégration Réseau et Sécurité : * L'instance est rattachée au meme VPC et déployée dans le
+sous-réseau, ainsi que c’est le meme Security Group.
+
+c) Instance 3: Windows Server
+Le dernier volet du parc hybride est représenté par une instance Windows Server, permettant de
+valider les capacités de supervision multi-plateforme de la solution Zabbix. Comme le démontrent les
+étapes de configuration (Figures ci-dessous), les paramètres suivants ont été appliqués :
+ Identification et Nommage : L'instance a été nommée
+Windows_Server_Client_EL_FELLAH_Meryem afin d'assurer une traçabilité parfaite au
+sein de la console AWS et de l'interface Zabbix.
+ Système d'Exploitation (AMI) : Pour ce client, l'image Microsoft Windows Server 2025
+Base (version 2025.12.10) a été sélectionnée, offrant ainsi un environnement de test basé sur
+la dernière génération des systèmes serveurs de Microsoft.
+ Dimensionnement (Type d'instance) : Encore une fois c’est t3.medium.
+ Intégration Réseau et Sécurité : * L'instance est rattachée au meme VPC et déployée dans le
+sous-réseau, ainsi que c’est le meme Security Group.
+
+3. Installation du Docker et Deploiement du Zabbix Ubuntu Server
+Cette étape consiste à transformer l'instance Ubuntu en une plateforme de supervision via la
+conteneurisation. L'installation de Docker et Docker-Compose permet de déployer l'intégralité de la
+pile Zabbix (Serveur, Base de données et Interface Web) de manière isolée, rapide et standardisée.
+Cette approche garantit une gestion agile des services et une portabilité optimale au sein de
+l'infrastructure AWS.
+3.1. Connexion SSH:
+La première étape consiste à établir une connexion sécurisée avec l'instance Ubuntu via le protocole
+SSH.
+ Description: Cette capture d'écran illustre l'accès réussi à l'interface en ligne de commande de
+l'instance EL_FELLAH_Meryem_ZabbixUbuntu en utilisant la cle ssh present sur AWS.
+ Détails techniques : On y confirme l'utilisation d'Ubuntu 24.04.3 LTS et l'adresse IP privée
+interne 10.0.3.253, ce qui valide la cohérence avec le plan d'adressage du VPC.
+ Analyse : Le système est prêt pour l'administration, avec une charge système nulle et une
+température de processeur stable, offrant un environnement sain pour l'installation des
+paquets.
+
+3.2. Installer Docker:
+On utilise le Docker pour lancer Zabbix sans installation manuelle compliquée.
+Comme l’image le montre, j’ai docker et docker-compose deja installer et updated en executant les
+commandes suivantes:
+sudo apt update
+sudo apt install -y docker.io docker-compose
+sudo systemctl start docker
+sudo systemctl enable docker
+
+3.2. Deploiement du Zabbix:
+Une fois Docker opérationnel, l'étape suivante consiste à structurer les fichiers nécessaires au
+déploiement multi-conteneurs de Zabbix.
+Passons a la creation du dossier zabix et fichier docker-compose.yml, en utilisant les commandes
+suivantes:
+mkdir zabbix
+cd Zabbix
+nano docker-compose.yml
+Cette capture d'écran ci-dessous confirme la création et l'organisation du répertoire de travail sur
+l'instance serveur.
+Un dossier dédié nommé zabbix/ a été créé pour centraliser les fichiers de configuration.
+ À l'intérieur de ce répertoire, on retrouve le fichier principal docker-compose.yml,
+édité via l'utilitaire nano pour définir l'orchestration des services.
+ La présence du fichier docker-compose_v3_alpine_pgsql_latest.yaml indique
+l'utilisation d'une architecture moderne basée sur Alpine Linux et PostgreSQL pour
+optimiser la légèreté et les performances de la base de données.
+
+Le fichier docker-compose.yml est la pièce maîtresse du déploiement. Il permet d'automatiser le
+lancement et l'interconnexion des services nécessaires à la plateforme Zabbix. Comme le montre la
+Figure ci-dessus, la configuration s'articule autour de trois conteneurs interdépendants :
+ Service postgres : Ce conteneur gère la base de données. Il utilise l'image postgres:16-
+alpine, une version légère basée sur Alpine Linux.
+ Service zabbix-server : Il s'agit du cœur applicatif. Il utilise l'image zabbix-server-
+pgsql:alpine-7.0-latest. Ce service dépend directement du conteneur de base de données
+(depends_on: postgres) et expose le port 10051, essentiel pour la réception des flux de
+monitoring.
+ Service zabbix-web : Ce conteneur fournit l'interface graphique utilisateur. Il repose sur
+l'image zabbix-web-nginx-pgsql:alpine-7.0-latest, combinant un serveur web Nginx et le
+support PostgreSQL.
+L'édition de ce fichier a été réalisée avec l'éditeur nano. Une fois la configuration finalisée, la sortie de
+l'éditeur s'effectue via le raccourci Ctrl+X, suivie de la commande docker-compose up -d pour lancer
+l'infrastructure en arrière-plan.
+J’utilise le `docker ps` pour s’assurer que le Zabbix server est bien lancé.
+3.3. Initialisation de l’interface web Zabbix:
+Une fois les conteneurs déployés avec succès, l'étape finale de la mise en place du serveur consiste à
+configurer l'accès à la console d'administration.
+ Connexion au portail : L'accès s'effectue via un navigateur Web en utilisant l'adresse IP
+publique de l'instance serveur. Dans ce projet, la connexion a été établie à l'URL :
+http://3.229.97.142/.
+ Authentification (Figure issue de l'image_959746.png) : La page de connexion officielle de
+Zabbix confirme que le conteneur zabbix-web est correctement exposé sur Internet. L'accès
+initial a été réalisé avec les identifiants administrateur par défaut :
+o Username : Admin
+o Password : zabbix
+
+4. Installation des agents Zabbix
+Revenons vers notre ligne de commande pour continuer avec l’installation des 2 agents Zabbix, qui
+seront 2 machines surveillées. On a le client Linux Ubuntu Server et le client Windows Server.
+Pour se deconnecter de la machine "EL_FELLAH_Meryem_ZabbixUbuntu" , je fais exit.
+4.1 . La machine cliente Linux:
+ Comme d’habitude je me connecte sur la machine “LinuxClient_EL_FELLAH_Meryem”
+en utilisant la cle ssh fournit sur AWS platform.
+ J’installe l’agent zabix pour le client Linux Server `sudo apt install zabbix-agent`, c’est
+ce que j’ai deja fait, donc juste pour montrer qu’il existe deja et tourne bien, voici la
+figure suivante.
+ Je rentre maintenant a l’interieur du fichier de congfiguration du ZabbixAgent pour
+modifier les 3 lignes:
+ Server= IP_PRIVEE_ZABBIX (10.0.3.253)
+ ServerActive= IP_PRIVEE_ZABBIX
+ Hostname= LinuxClient_EL_FELLAH_Meryem
+
+ Revenons vers l’interface Zabbix dans laquelle j’ai deja accede, parce que
+maintenant j’aurai besoin de creer un Host pour le client LinuxServer en utilisant le
+meme nom “LinuxClient_EL_FELLAH_Meryem”.
+Dans Configuration → Hosts → Create host :
+• Host name = exactement le même que dans zabbix_agentd.conf
+• Type = Agent
+• IP = IP privée du client Linux (10.0.3.160)
+• Port = 10050
+• Template = Linux by Zabbix agent
+• Host group = Linux servers
+Après ça, si l’agent tourne, le statut passe en ZBX vert.
+
+4.2 . La machine cliente Windows:
+ Comme d’habitude je me connecte sur la machine “LinuxClient_EL_FELLAH_Meryem”
+mais cette fois-ci en utilisant le client RDP et non pas le client SSH.
+ Je clique sur le bouton “Télécharger le fichier bureau a distance”.
+ Je clique sur obtenir le mot de passe, puis je fournis la clé de cette instance que j’avais
+Déjà dans le dossier Downloads, ce qui me donne un mot de passe chiffré que je dois le
+déchiffrer pour l’utiliser après.
+ Par la suite je clique sur ce fichier quand il est téléchargé.
+ Apres cliquer, la boite de texte grise suivante s’affiche, dans laquelle on colle le mot de
+passe qu’on a deja dechiffree et copiee.
+
+ Finalement, session Windows Server est ouverte:
+
+ Pour télécharger l’agent Zabbix, j’ouvre le navigateur Microsoft Edge. Je vais sur le site
+officiel Zabbix, exactement ici https://www.zabbix.com/download_agents. Je Choisis le
+bon agent et je telecharge le fichier .msi.
+
+ Dans la continuite, pour installer l’agent Zabbix, je double-clique sur le fichier .msi,je
+continue a cliquer sur Next.
+
+ Cette ecran est tres importante a faire attention, parce qu’elle contient les configurations
+les plus importantes:
+ HostName = je dois mettre le meme nom que j’utilisera lors de la creation du host
+WindowsServer dans l’interface web Zabbix.
+ Zabbix server IP/DNS = IP_PRIVEE du
+“EL_FELLAH_Meryem_ZabbixUbuntu”
+ Server or Proxy for active checks = IP_PRIVEE du
+“EL_FELLAH_Meryem_ZabbixUbuntu”. Parce que le serveur Zabbix est sur une
+autre machine, les active checks doivent parler au serveur Zabbix.
+
+ Agent listen port = 10050. Parce que c’est le port par défaut Zabbix Agent a
+utorisé dans mon Security Group
+N.B: Lors de l’installation de l’agent Zabbix sur Windows Server, les paramètres Server et
+ServerActive ont été configurés avec l’adresse IP privée du serveur Zabbix afin d’assurer
+la communication interne au sein du VPC.”
+ En cliquant sur Next et Install, je me mene vers la page suivante:
+ Maintenant, pour verifier le service je clique Win + R et je tape services.msc, puis je
+cherche Zabbix Agent.
+
+ Et voila, la figure au-dessus montre que Service Zabbix Agent Windows est actif.
+
+ Revenons vers l’interface Zabbix, parce que maintenant j’aurai besoin de créer un Host
+pour le client WindowsServer en utilisant le même nom
+“Windows_Server_Client_EL_FELLAH_Meryem”.
+Dans Configuration → Hosts → Create host :
+• Host name = Windows_Server_Client_EL_FELLAH_Meryem
+• Type = Agent
+• IP = IP privée du client Windows (10.0.14.60)
+• Port = 10050
+• Template = Windows by Zabbix agent
+• Host groups = Windows servers
+ Après ça, si l’agent tourne, le statut passe en ZBX vert.
+
+5. Monitoring et Dashboards
+Après l’ajout des hôtes Linux et Windows, Zabbix permet de visualiser en temps réel les métriques
+système telles que l’utilisation CPU, la mémoire et l’espace disque. Les graphiques confirment la
+bonne communication entre les agents et le serveur Zabbix.
+🎯 Objectifs de cette étape
+À la fin de cette étape, je dois pouvoir :
+1. Voir les données en temps réel (CPU, RAM, Disk)
+2️. Montrer que Zabbix reçoit bien les métriques
+9.1) Vérifier la réception des données (Latest data)
+a) Filtrer par Linux Client:
+Je choisis par exemple le Tag Value memory.
+
+Puis je fais check du host selon le name “Memory Utilization”, puis cliquer sur Display
+Graph, ce qui me donne tant que Admin l’opportunite a faire du Tracking de la Ressource
+memory en visualisant son changement dans un graph bien Claire.
+b) Filtrer par Windows Client:
+Pour pour montrer que ça réagit, dans session windows, j'ai ouvert 3 ongles youtube 8k, et le
+powershell, et file explorer, ça fait 15 minutes ou plus. Quand je reviens vers zabbix, Monitoring →
+Latest data:
+
+Je choisis le Tag Value memory.
+Puis je fais check du host selon le name “Memory Utilization”, puis cliquer sur Display Graph, afin de
+me permettre tant que Admin de surveiller l’utilisation de la memoire par le serveur Windows
+Le graphe ci-dessous montre que le pourcentage de l’utilisation de la memoir a augmenter
+rapidement entre 11:44PM – 11:48PM, parce que a ce temps J'étais entrain de lancer les 3 videos sur
+youtube, ainsi que d’autres programmes comme le powershell et le file explorer.
+
+9.2) Vérifier les problèmes / alertes
+La puissance de la solution Zabbix réside dans sa capacité à fournir une visibilité immédiate sur l'état
+de santé du parc informatique. Comme l'illustre le widget "Current problems" du tableau de bord, le
+système assure une détection proactive des anomalies en temps réel.
+ Monitoring des incidents : Le tableau de bord affiche un total de quatre événements détectés
+sur le client Windows, démontrant l'efficacité de la communication entre l'agent et le serveur.
+ Détails et Granularité : Pour chaque alerte, Zabbix fournit des informations précises : l'heure
+exacte de l'incident, le niveau de sévérité (marqué ici en orange comme "Average") et la
+nature du problème, tel que l'arrêt inattendu de services système comme le Windows Update
+Service.
+ Résolution et Historique : On observe qu'un des problèmes a déjà été marqué comme résolu,
+ce qui permet à l'administrateur de suivre le cycle de vie complet d'un incident directement
+depuis la console centrale.
+ Aide à l'administration : Cette centralisation des alertes simplifie considérablement la tâche
+de l'administrateur, lui permettant d'intervenir rapidement sur des composants critiques sans
+avoir à inspecter manuellement chaque instance du parc hybride.
+
+9.3) Dashboards:
+Cette capture d'écran présente le tableau de bord centralisé après la configuration réussie du parc
+hybride. On y observe plusieurs indicateurs clés de performance (KPI) qui valident le travail réalisé :
+ Host Availability (Disponibilité des hôtes) : Le widget indique que 2 hôtes sont
+"Available" (en vert). Cela confirme que le Serveur Zabbix communique correctement avec
+le Client Linux et le Client Windows via leurs agents respectifs.
+ System Information : On confirme ici que le serveur Zabbix est en cours d'exécution
+("Zabbix server is running: Yes") sur le port 10051, conformément à l'architecture réseau
+définie.
+ Current Problems (Problèmes actuels) : Cette section montre la réactivité du système en
+temps réel. On y voit des alertes spécifiques provenant de l'hôte
+Windows_Server_Client_EL_FELLAH_Meryem, prouvant que les modèles (templates) de
+surveillance Windows ont été correctement appliqués et remontent des informations précises
+sur l'état des services du système.
+ Statut Global : Avec un total de 3 hôtes enregistrés (le serveur lui-même et les deux clients),
+cette interface démontre la réussite du déploiement conteneurisé sous Docker pour superviser
+un environnement cloud AWS complexe.
+
+Conclusion
+La réalisation de ce projet a permis de mettre en place une infrastructure de supervision robuste et
+évolutive sur AWS. En combinant la puissance de Zabbix et la flexibilité de la conteneurisation avec
+Docker, nous avons réussi à unifier le monitoring d'un parc hybride composé d'instances Linux et
+Windows.
+L'implémentation réussie du réseau (VPC, Security Groups) et le déploiement des agents ont permis
+d'établir une remontée de données précise et une détection d'incidents en temps réel. Ce projet
+confirme que l'automatisation et la centralisation des métriques sont des leviers essentiels pour garantir
+la haute disponibilité et la sécurité des services cloud modernes.
+Difficultés Rencontrées et Solutions
+Confusion sur le protocole de connexion à distance : Lors de la phase d'accès aux clients, il
+y a eu une confusion initiale entre l'accès SSH et l'accès RDP pour l'instance Windows.
+ Solution : Il a fallu identifier que l'instance
+Windows_Server_Client_EL_FELLAH_Meryem nécessitait le protocole RDP et le
+déchiffrement d'un mot de passe administrateur via la clé .pem, contrairement au client
+Linux qui s'administre via SSH.
+Ajustement de la communication Agent-Serveur au sein du réseau privé : La
+configuration des paramètres de l'agent (Server et ServerActive) représentait un point critique
+pour assurer la remontée des données sans exposer inutilement les flux sur l'internet public.
+ Solution : La solution a consisté à utiliser exclusivement les adresses IP privées du VPC
+(comme 10.0.3.253) dans le fichier de configuration de l'agent et à ouvrir précisément le
+port 10050 dans le Groupe de Sécurité pour permettre au serveur Zabbix de communiquer
+avec ses clients en toute sécurité.
+
